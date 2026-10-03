@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Without secrets, the UI runs a clearly labeled sample preview. Preview data lives only in tab memory, disappears on reload, and uses deterministic matching rather than a connected AI model.
+Signed-out users can save links, screenshots, and text in guest mode, recall matching saved passages, and export their library and chat. Guest data lives only in tab memory, disappears on reload or navigation away, and is not uploaded. Recall uses deterministic matching, not a connected AI model. Sign-in warns users to export guest content before leaving; automatic guest-to-account import is not implemented.
 
 ## Cloud setup
 1. Create a Supabase project. Run `supabase/schema.sql` in its SQL editor.
