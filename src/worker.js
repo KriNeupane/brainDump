@@ -1,6 +1,5 @@
 import {cookieTokens,sessionEndpoint} from './session.js';
 import { streamAnswer, citedSources } from './stream.js';
-import { captureIntent } from '../public/capture-intent.js';
 import { readArticle } from './articles.js';
 import { guidanceReply } from '../public/guidance.js';
 import { selectContext, modelInput } from './ai-policy.js';
@@ -15,6 +14,12 @@ async function db(env,token,path,options={}) {
 async function readItems(env,token,owner) {
   const rows=await db(env,token,'memories?select=id,created_at,payload&order=created_at.desc&limit=201');
   return Promise.all(rows.map(async row=>({...await decrypt(row.payload,env.CONTENT_KEY,owner),id:row.id,createdAt:row.created_at})));
+}
+async function dumpAck(env,user,type){
+ if(env.AI_ENABLED!=='true'||!env.AI||!env.AI_BUDGET)return 'Saved.';
+ try{const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(user.id))),b=>b.toString(16).padStart(2,'0')).join('');const budget=env.AI_BUDGET.get(env.AI_BUDGET.idFromName('shared-ai-budget'));const response=await budget.fetch('https://budget/reserve',{method:'POST',body:JSON.stringify({user:hash})});if(!response.ok||(await response.json()).reason)return 'Saved.';
+ const result=await env.AI.run(env.AI_MODEL,{messages:[{role:'system',content:'A memory was successfully saved. Respond only with a friendly acknowledgment of 2–6 words. No summary, questions, suggestions, citations or offers. Do not mention anything about the content. /no_think'},{role:'user',content:'Saved a '+type}],max_tokens:24,temperature:0.7});const text=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim();return text&&/^(?:saved|noted|got it|all set|added|done|it.s saved)/i.test(text)&&! /\b(?:would|help|want|can|let)\b/i.test(text)&&text.length<=60&&!/[?\n\[\]]/.test(text)&&text.split(/\s+/).length<=8?text:'Saved.';
+ }catch{return 'Saved.'}
 }
 async function handle(request,env) {
  const url=new URL(request.url);
@@ -62,9 +67,10 @@ async function handle(request,env) {
   let item={type:body.type,title:String(body.title||'Untitled memory').slice(0,200),content:String(body.content||'').slice(0,40000),tags:Array.isArray(body.tags)?body.tags.slice(0,8).map(t=>String(t).slice(0,40)):[],url:'',status:'saved'};
   if(item.type==='article') {
    let link;try{link=safeUrl(body.url)}catch(e){return json({error:e.message},400)}item.url=link.href;
-   // Deliberately no server URL fetching: blocks SSRF until hardened extraction is deployed.
    item.status=item.content?'saved':'needs-content';
    if(!body.title)item.title=link.hostname;
+   const existing=items.find(saved=>saved.url===link.href);if(body.dump&&existing)return json({item:existing,acknowledgment:await dumpAck(env,user,'link')});
+   if(body.dump){try{const article=await readArticle(link.href);item={...item,...article,status:'saved'};}catch(e){if(e.message==='This site blocked access. Paste its article text here instead.'){item.captureIssue='blocked';}else return json({error:e.message},422);}}
   }
   if(item.type==='screenshot') {
    if(!validScreenshot(body.image))return json({error:'Use a PNG, JPEG, or WebP smaller than 3 MB.'},400);
@@ -72,24 +78,14 @@ async function handle(request,env) {
   }
   if(item.type==='note'&&!item.content.trim())return json({error:'Write something to remember.'},400);
   const rows=await db(env,token,'memories',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(item,env.CONTENT_KEY,user.id)})});
-  return json({item:{...item,id:rows[0].id,createdAt:rows[0].created_at}},201);
+  return json({item:{...item,id:rows[0].id,createdAt:rows[0].created_at},...(body.dump?{acknowledgment:await dumpAck(env,user,item.type)}:{})},201);
  }
  if(request.method==='POST'&&url.pathname==='/api/chat') {
   const message=typeof body.message==='string'?body.message.trim():'';
   if(!message)return json({error:'Write a question first.'},400);
-  const capture=captureIntent(message);
-  if(message.length>(capture?40000:1000))return json({error:'Keep your question under 1,000 characters.'},400);
+  if(message.length>1000)return json({error:'Keep your question under 1,000 characters.'},400);
   const items=await readItems(env,token,user.id);
-  let savedItem=null;
-  if(capture){
-   if(items.length>=200)return json({error:'Your library has reached the 200-memory beta limit.'},429);
-   let data;
-   if(capture.type==='article'){
-    const existing=items.find(i=>i.url===capture.url);if(existing)savedItem=existing;
-    else{try{data={type:'article',...await readArticle(capture.url),tags:[],status:'saved'};}catch(e){if(e.message==='This site blocked access. Paste its article text here instead.'){const link=safeUrl(capture.url);data={type:'article',url:link.href,title:link.hostname,content:'',tags:[],status:'needs-content',captureIssue:'blocked'};}else return json({error:e.message||'Could not read this link. Paste its text instead.'},422);}}
-   }else data={type:'note',title:capture.content.slice(0,80),content:capture.content,tags:[],url:'',status:'saved'};
-   if(data){const rows=await db(env,token,'memories',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(data,env.CONTENT_KEY,user.id)})});savedItem={...data,id:rows[0].id,createdAt:rows[0].created_at};items.unshift(savedItem);}
-  }
+  const savedItem=null;
   const history=await db(env,token,'chat_messages?select=payload&order=created_at.desc&limit=2');
   const previous=await Promise.all(history.map(r=>decrypt(r.payload,env.CONTENT_KEY,user.id)));
   const context=savedItem?{reason:null,sources:[savedItem]}:selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[]);
