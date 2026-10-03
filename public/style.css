@@ -28,3 +28,19 @@ html[data-theme=dark]{color-scheme:dark;--paper:#212121;--ink:#ececec;--muted:#a
 }
 @media(max-width:900px){.sidebar{box-shadow:none}.sidebar-open .sidebar{box-shadow:15px 0 40px #0002}}
 .library-toolbar>.choice-menu{margin-right:0}
+/* Mobile chat stays quiet, with the composer always at the bottom. */
+@media(max-width:900px){
+ body:has(#chat-view:not([hidden])){height:var(--chat-height,100dvh);overflow:hidden}
+ body:has(#chat-view:not([hidden])) main{height:var(--chat-height,100dvh);min-height:0}
+ #chat-view,#chat-view.has-messages{min-height:0;flex:1;justify-content:flex-start;padding:0 0 calc(12px + env(safe-area-inset-bottom))!important}
+ #chat-view .chat-heading,#chat-view #suggestions{display:none!important}
+ #chat-view .messages{display:block;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 4px 20px;margin:0;scrollbar-width:none}
+ #chat-view .chat-form{position:relative;bottom:auto;flex-shrink:0;margin:0;display:flex;align-items:flex-end;gap:8px;border-radius:28px;padding:7px 8px;box-shadow:none}
+ #chat-view .chat-form textarea{order:1;flex:1;min-width:0;min-height:40px;max-height:150px;padding:7px 0;line-height:26px}
+ #chat-view .composer-actions{display:contents}
+ #chat-view #attach{order:0;flex-shrink:0}
+ #chat-view #send{order:2;flex-shrink:0}
+ #chat-view .chat-form p{display:none}
+}
+#question,#question:focus,#question:focus-visible{border:0;outline:none;box-shadow:none;background:transparent}
+.chat-form:focus-within{border-color:var(--line)}

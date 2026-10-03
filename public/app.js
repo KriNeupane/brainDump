@@ -74,3 +74,7 @@ $('#sidebar').addEventListener('keydown',e=>{
  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
 });
 setSidebar(false);
+
+// Follow the visible viewport when a phone keyboard opens.
+function updateChatViewport(){document.documentElement.style.setProperty('--chat-height',(window.visualViewport?.height||window.innerHeight)+'px')}
+window.visualViewport?.addEventListener('resize',updateChatViewport);window.addEventListener('resize',updateChatViewport);updateChatViewport();
