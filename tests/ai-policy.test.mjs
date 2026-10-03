@@ -8,6 +8,7 @@ test('irrelevant and injection requests never receive model context',()=>{
 test('grounded questions and explicit followups use saved sources only',()=>{
  assert.equal(selectContext(items,'What did I save about GPU?').sources[0].id,'gpu');
  assert.equal(selectContext(items,'Summarize it',[{id:'gpu'}]).sources[0].id,'gpu');
+ assert.equal(selectContext(items,'Tell me more',[{id:'gpu'}]).sources[0].id,'gpu');
  assert.equal(selectContext(items,'Summarize it',[{id:'deleted'}]).reason,'missing');
 });
 test('model context and output are bounded and exclude images',()=>{

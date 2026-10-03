@@ -1,6 +1,6 @@
 import { selectContext, modelInput } from './ai-policy.js';
 export { AiBudget } from './ai-policy.js';
-import { safeUrl, encrypt, decrypt, extractArticle, retrieve } from './security.js';
+import { safeUrl, encrypt, decrypt, extractArticle, retrieve, validScreenshot } from './security.js';
 const json = (data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 async function db(env,token,path,options={}) {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`,{...options,headers:{apikey:env.SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json',Prefer:'return=representation',...options.headers}});
@@ -32,11 +32,12 @@ async function handle(request,env) {
  }
  if(request.method==='DELETE'&&url.pathname==='/api/data') {await db(env,token,`memories?user_id=eq.${user.id}`,{method:'DELETE'});await db(env,token,`chat_messages?user_id=eq.${user.id}`,{method:'DELETE'});return json({ok:true});}
  if(request.method==='GET'&&url.pathname==='/api/chat') {
- const rows=await db(env,token,'chat_messages?select=payload&order=created_at.asc&limit=200');return json({messages:await Promise.all(rows.map(r=>decrypt(r.payload,env.CONTENT_KEY,user.id)))});
+ const rows=await db(env,token,'chat_messages?select=payload&order=created_at.desc&limit=200');return json({messages:await Promise.all(rows.reverse().map(r=>decrypt(r.payload,env.CONTENT_KEY,user.id)))});
  }
  if(Number(request.headers.get('Content-Length'))>4500000) return json({error:'Upload must be smaller than 3 MB.'},413);
  const raw=await request.text();if(raw.length>4500000)return json({error:'Upload too large.'},413);
  let body;try{body=JSON.parse(raw)}catch{return json({error:'Invalid request.'},400)}
+ if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Send a JSON object.'},400);
  if(request.method==='POST'&&url.pathname==='/api/memories') {
   if(!['article','screenshot','note'].includes(body.type))return json({error:'Choose a supported format.'},400);
   const items=await readItems(env,token,user.id);if(items.length>=200)return json({error:'Beta limit reached: 200 memories. Export or delete some items.'},429);
@@ -48,7 +49,7 @@ async function handle(request,env) {
    if(!body.title)item.title=link.hostname;
   }
   if(item.type==='screenshot') {
-   if(!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(body.image||'')||body.image.length>4200000)return json({error:'Use a PNG, JPEG, or WebP smaller than 3 MB.'},400);
+   if(!validScreenshot(body.image))return json({error:'Use a PNG, JPEG, or WebP smaller than 3 MB.'},400);
    item.image=body.image;item.status=item.content?'saved':'needs-content';
   }
   if(item.type==='note'&&!item.content.trim())return json({error:'Write something to remember.'},400);
@@ -78,7 +79,7 @@ async function handle(request,env) {
    if(reason)return json({error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
    try {
     const result=await env.AI.run(env.AI_MODEL,modelInput(message,sources));
-    answer=String(result.response||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim().slice(0,2400);
+    answer=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim().slice(0,2400);
     if(!answer)throw Error('Empty response');
    }catch{return json({error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
   }

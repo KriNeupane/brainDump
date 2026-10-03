@@ -27,3 +27,10 @@ export function retrieve(items, query) {
   const terms = [...new Set(query.toLowerCase().match(/[a-z0-9]{3,}/g)||[])].filter(t=>!['what','that','this','with','about','have','from','sent','read','article','remember','tell','something'].includes(t));
   return items.map(item=>({item,score:terms.reduce((n,t)=>n+((item.title+' '+item.content+' '+item.tags.join(' ')).toLowerCase().includes(t)?1:0),0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,5).map(x=>x.item);
 }
+export function validScreenshot(image) {
+ if(typeof image!=='string'||image.length>4200000)return false;
+ const match=image.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);if(!match||match[2].length%4)return false;
+ let bytes;try{bytes=atob(match[2]);}catch{return false;}
+ if(bytes.length>3*1024*1024)return false;
+ return match[1]==='png'?bytes.startsWith('\x89PNG\r\n\x1a\n'):match[1]==='jpeg'?bytes.startsWith('\xff\xd8\xff'):bytes.startsWith('RIFF')&&bytes.slice(8,12)==='WEBP';
+}

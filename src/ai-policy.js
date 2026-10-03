@@ -3,7 +3,7 @@ const intent = /\b(saved?|memor(?:y|ies)|recall|remember|summari[sz]e|summary|co
 const forbidden = /\b(ignore|override|disregard|system prompt|jailbreak|write (?:me )?(?:code|an essay|a poem)|homework|latest|current news|browse|search the web)\b/i;
 const followup = /^(?:summari[sz]e (?:it|that|them)|explain (?:it|that)|(?:what|how) (?:does|did) (?:it|that|this)|tell me more|compare them)\b/i;
 export function selectContext(items,message,previousSources=[]) {
- if(forbidden.test(message)||!intent.test(message)) return {reason:'scope',sources:[]};
+ if(forbidden.test(message)||(!intent.test(message)&&!followup.test(message))) return {reason:'scope',sources:[]};
  const topic=message.replace(/\b(?:i|my|me|you|your|our|the|and|for|are|can|could|would|please|did|does|how|why|when|where|was|were|which|is|in|on|of|to|it|that|this|them|they|saved?|memor(?:y|ies)|recall|remember|summari[sz]e|summary|compare|explain|article|note|screenshot|said|say|mention|mean|find|more)\b/gi,' ');
  let sources=retrieve(items,topic).slice(0,3);
  if(followup.test(message)&&previousSources.length) sources=previousSources.map(s=>items.find(i=>i.id===s.id)).filter(Boolean).slice(0,3);
