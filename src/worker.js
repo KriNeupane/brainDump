@@ -88,7 +88,7 @@ async function handle(request,env) {
   const savedItem=null;
   const history=await db(env,token,'chat_messages?select=payload&order=created_at.desc&limit=2');
   const previous=await Promise.all(history.map(r=>decrypt(r.payload,env.CONTENT_KEY,user.id)));
-  const context=savedItem?{reason:null,sources:[savedItem]}:selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[]);
+  const context=savedItem?{reason:null,sources:[savedItem]}:selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[],{timeZone:typeof body.timeZone==='string'?body.timeZone:'UTC',previousQuestion:previous.find(m=>m.role==='user')?.content,previousInventory:previous.find(m=>m.role==='assistant')?.inventory});
   const sources=context.sources;
   let answer;
   const guidance=guidanceReply(message,items.length>0);
@@ -105,20 +105,20 @@ async function handle(request,env) {
    const {reason}=await reservation.json();
    if(reason)return json({...(savedItem?{savedItem}:{}),error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
    try {
-    const input=modelInput(savedItem?(savedItem.status==='needs-content'?'The link is saved, but the publisher blocked article access. Explain this briefly and invite the user to use Add article text. You have not read the article: do not summarize it, infer facts from its URL, or cite it as evidence.':'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.'):message,sources);
-    input.messages.splice(1,0,...previous.slice().reverse().map(m=>({role:m.role,content:m.content.slice(0,800)})));
+    const input=modelInput(savedItem?(savedItem.status==='needs-content'?'The link is saved, but the publisher blocked article access. Explain this briefly and invite the user to use Add article text. You have not read the article: do not summarize it, infer facts from its URL, or cite it as evidence.':'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.'):message,sources,context.inventory);
+    if(!context.inventory)input.messages.splice(1,0,...previous.slice().reverse().map(m=>({role:m.role,content:m.content.slice(0,800)})));
     const result=await env.AI.run(env.AI_MODEL,{...input,stream:body.stream===true});
     if(body.stream===true){
      if(!result?.getReader)throw Error('Invalid stream');
      return streamAnswer(result,{...(savedItem?{savedItem}:{}),sources:sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))},async content=>{
-      for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},{role:'assistant',content,sources:citedSources(content,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()}])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
+      for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},{role:'assistant',content,...(context.inventory?{inventory:context.inventory}:{}),sources:citedSources(content,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()}])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
      });
     }
     answer=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim().slice(0,2400);
     if(!answer)throw Error('Empty response');
    }catch{return json({...(savedItem?{savedItem}:{}),error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
   }
-  const reply={...(savedItem?{savedItem}:{}),role:'assistant',content:(savedItem?'Saved to your memories.\n\n':'')+answer,sources:citedSources(answer,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()};
+  const reply={...(savedItem?{savedItem}:{}),role:'assistant',...(context.inventory?{inventory:context.inventory}:{}),content:(savedItem?'Saved to your memories.\n\n':'')+answer,sources:citedSources(answer,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()};
   const {savedItem:captured,...storedReply}=reply;
   for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},storedReply])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
   return json(reply);

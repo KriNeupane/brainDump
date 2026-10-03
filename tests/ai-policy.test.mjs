@@ -1,6 +1,19 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import { selectContext, modelInput, AiBudget } from '../src/ai-policy.js';
 const items=[{id:'gpu',title:'GPU checklist',content:'Compare VRAM and power. '.repeat(200),tags:[],createdAt:'2026-10-03'}];
+test('today inventory counts all dump types by local capture date, not article dates or keywords',()=>{
+ const library=[{id:'article',title:'Druski',content:'August 2026 story',createdAt:'2026-10-04T00:30:00Z'},{id:'blocked',title:'washingtonpost.com',content:'',status:'needs-content',createdAt:'2026-10-03T19:00:00Z'},{id:'image',title:'Image',content:'',createdAt:'2026-10-03T18:00:00Z'},{id:'old',title:'Today in the news',content:'today',createdAt:'2026-10-03T02:00:00Z'}];
+ const options={now:'2026-10-04T01:00:00Z',timeZone:'America/Chicago'};
+ const result=selectContext(library,'what did i save today?',[],options);assert.equal(result.inventory.count,3);assert.equal(result.inventory.day,'2026-10-03');assert.deepEqual(result.sources.map(s=>s.id),['article','blocked','image']);
+ assert.equal(selectContext(library,'is that all i saved?',[],{...options,previousQuestion:'what did i save today?'}).inventory.count,3);
+ const input=modelInput('what did i save today?',result.sources,result.inventory);const data=JSON.parse(input.messages[1].content);assert.equal(data.inventory.count,3);assert.equal(data.sources[0].text,'');
+ assert.equal(selectContext(library,'what did i save yesterday?',[],options).inventory.count,1);
+});
+test('inventory counts the full library even when its display is bounded',()=>{
+ const library=Array.from({length:25},(_,id)=>({id,title:'Dump '+id,content:'',createdAt:'2026-10-03'}));
+ const result=selectContext(library,'show all my dumps');assert.equal(result.inventory.count,25);assert.equal(result.inventory.shown,20);assert.equal(result.sources.length,20);
+ assert.equal(selectContext([], 'what did i save today?').inventory.count,0);
+});
 test('informal UT deadline recall excludes unrelated dumped articles',()=>{
  const library=[{id:'ut',title:'Apply | Computer & Data Science Online',url:'https://cdso.utexas.edu/apply',content:'Fall Final Deadline April 15. Spring Final Deadline September 1.',tags:[]},{id:'gt',title:'Georgia Tech funding',content:'Apply to master programs for funding',tags:[]},{id:'news',title:'Guardian',content:'The application of a drug was discussed at the time',tags:[]}];
  assert.deepEqual(selectContext(library,'hey i gave u somthing about UT applcation, can you find when was the deadline to apply to that masters program?').sources.map(s=>s.id),['ut']);
