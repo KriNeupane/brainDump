@@ -44,3 +44,9 @@ html[data-theme=dark]{color-scheme:dark;--paper:#212121;--ink:#ececec;--muted:#a
 }
 #question,#question:focus,#question:focus-visible{border:0;outline:none;box-shadow:none;background:transparent}
 .chat-form:focus-within{border-color:var(--line)}
+
+/* Desktop uses an icon rail; touch devices retain the labeled drawer. */
+.nav-icon{flex-shrink:0}.brand img{border-radius:9px;flex-shrink:0}
+@media(min-width:901px){
+ .sidebar{width:72px;padding:16px 8px;align-items:center;overflow:visible}.sidebar .brand{padding:0;margin:0 0 30px;display:grid;place-items:center;width:48px;height:48px}.sidebar .brand span,.sidebar .nav span,.sidebar .nav small,.sidebar #auth-label{display:none}.sidebar nav{width:100%;gap:6px}.sidebar .nav{width:48px;height:48px;min-height:48px;padding:0;display:grid;place-items:center;margin:0 auto;border-radius:14px}.sidebar-bottom{width:100%;padding:0}.sidebar .profile{display:grid;place-items:center;padding:0;width:48px;height:48px;margin:0 auto}.sidebar .avatar{width:36px;height:36px;font-size:19px}.sidebar [data-tooltip]{position:relative}.sidebar [data-tooltip]:after{content:attr(data-tooltip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--ink);color:var(--paper);font:12px/1.4 -apple-system,sans-serif;letter-spacing:0;padding:7px 10px;border-radius:7px;box-shadow:0 3px 10px #0002;opacity:0;visibility:hidden;pointer-events:none;z-index:50}.sidebar [data-tooltip]:hover:after,.sidebar [data-tooltip]:focus-visible:after{opacity:1;visibility:visible}main{margin-left:72px}
+}
