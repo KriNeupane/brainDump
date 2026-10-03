@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "braindump",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "ai": { "binding": "AI" },
+  "vars": { "AI_ENABLED": "false", "AI_MODEL": "@cf/qwen/qwen3-30b-a3b-fp8" }
+}

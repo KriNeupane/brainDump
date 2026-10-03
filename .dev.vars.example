@@ -1,0 +1,6 @@
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
+# Generate: openssl rand -base64 32. Keep this stable; losing it loses encrypted content.
+CONTENT_KEY=YOUR_BASE64_32_BYTE_KEY
+# AI stays disabled until provider privacy terms are reviewed.
+AI_ENABLED=false
