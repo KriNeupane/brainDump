@@ -23,9 +23,17 @@ export function extractArticle(html) {
   const text = body.replace(/<(script|style|nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/\s+/g,' ').trim();
   return {title:title.replace(/<[^>]+>/g,'').trim().slice(0,200),text:text.slice(0,40000)};
 }
+export function queryTerms(query) {
+ const normalized=query.toLowerCase().replace(/\bapplcation\b/g,'application').replace(/\bmasters\b/g,'master');
+ return [...new Set(normalized.match(/[a-z0-9]{2,}/g)||[])].filter(t=>!['hey','gave','somthing','something','what','that','this','with','about','have','from','sent','read','article','remember','tell','the','was','when','can','you','find','to','it','is','me','my','did','and','for','of','on','in'].includes(t));
+}
 export function retrieve(items, query) {
-  const terms = [...new Set(query.toLowerCase().match(/[a-z0-9]{3,}/g)||[])].filter(t=>!['what','that','this','with','about','have','from','sent','read','article','remember','tell','something'].includes(t));
-  return items.map(item=>({item,score:terms.reduce((n,t)=>n+((item.title+' '+item.content+' '+item.tags.join(' ')).toLowerCase().includes(t)?1:0),0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,5).map(x=>x.item);
+ const terms=queryTerms(query);
+ const utItems=/\but\b/i.test(query)?items.filter(item=>/^https:\/\/(?:[\w-]+\.)*utexas\.edu(?:\/|$)/i.test(item.url||'')||/\b(?:UT Austin|University of Texas)\b/i.test(item.title+' '+item.content)):[];
+ return (utItems.length?utItems:items).map(item=>{
+  const title=new Set(queryTerms(item.title+' '+(item.url||'')+' '+item.tags.join(' '))),body=new Set(queryTerms(item.content));
+  return {item,score:terms.reduce((n,t)=>n+(title.has(t)?4:body.has(t)?1:0),0)+(utItems.length?8:0)};
+ }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,5).map(x=>x.item);
 }
 export function validScreenshot(image) {
  if(typeof image!=='string'||image.length>4200000)return false;
