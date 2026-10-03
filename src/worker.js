@@ -1,3 +1,5 @@
+import { captureIntent } from '../public/capture-intent.js';
+import { readArticle } from './articles.js';
 import { guidanceReply } from '../public/guidance.js';
 import { selectContext, modelInput } from './ai-policy.js';
 export { AiBudget } from './ai-policy.js';
@@ -60,11 +62,22 @@ async function handle(request,env) {
  if(request.method==='POST'&&url.pathname==='/api/chat') {
   const message=typeof body.message==='string'?body.message.trim():'';
   if(!message)return json({error:'Write a question first.'},400);
-  if(message.length>1000)return json({error:'Keep your question under 1,000 characters.'},400);
+  const capture=captureIntent(message);
+  if(message.length>(capture?40000:1000))return json({error:'Keep your question under 1,000 characters.'},400);
   const items=await readItems(env,token,user.id);
+  let savedItem=null;
+  if(capture){
+   if(items.length>=200)return json({error:'Your library has reached the 200-memory beta limit.'},429);
+   let data;
+   if(capture.type==='article'){
+    const existing=items.find(i=>i.url===capture.url&&i.content);if(existing)savedItem=existing;
+    else{try{data={type:'article',...await readArticle(capture.url),tags:[],status:'saved'};}catch(e){return json({error:e.message||'Could not read this link. Paste its text instead.'},422);}}
+   }else data={type:'note',title:capture.content.slice(0,80),content:capture.content,tags:[],url:'',status:'saved'};
+   if(data){const rows=await db(env,token,'memories',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(data,env.CONTENT_KEY,user.id)})});savedItem={...data,id:rows[0].id,createdAt:rows[0].created_at};items.unshift(savedItem);}
+  }
   const history=await db(env,token,'chat_messages?select=payload&order=created_at.desc&limit=2');
   const previous=await Promise.all(history.map(r=>decrypt(r.payload,env.CONTENT_KEY,user.id)));
-  const context=selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[]);
+  const context=savedItem?{reason:null,sources:[savedItem]}:selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[]);
   const sources=context.sources;
   let answer;
   const guidance=guidanceReply(message,items.length>0);
@@ -79,15 +92,16 @@ async function handle(request,env) {
    const reservation=await budget.fetch('https://budget/reserve',{method:'POST',body:JSON.stringify({user:userHash})});
    if(!reservation.ok)return json({error:'AI is temporarily unavailable.'},503);
    const {reason}=await reservation.json();
-   if(reason)return json({error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
+   if(reason)return json({...(savedItem?{savedItem}:{}),error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
    try {
-    const result=await env.AI.run(env.AI_MODEL,modelInput(message,sources));
+    const result=await env.AI.run(env.AI_MODEL,modelInput(savedItem?'I just shared this source. Briefly explain what it is about, highlight the useful details, and ask one relevant follow-up question.':message,sources));
     answer=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim().slice(0,2400);
     if(!answer)throw Error('Empty response');
-   }catch{return json({error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
+   }catch{return json({...(savedItem?{savedItem}:{}),error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
   }
-  const reply={role:'assistant',content:answer,sources:sources.map(s=>({id:s.id,title:s.title})),createdAt:new Date().toISOString()};
-  for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},reply])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
+  const reply={...(savedItem?{savedItem}:{}),role:'assistant',content:(savedItem?'Saved to your memories.\n\n':'')+answer,sources:sources.map(s=>({id:s.id,title:s.title})),createdAt:new Date().toISOString()};
+  const {savedItem:captured,...storedReply}=reply;
+  for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},storedReply])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
   return json(reply);
  }
  return json({error:'Not found.'},404);

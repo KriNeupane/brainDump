@@ -72,3 +72,5 @@ html[data-theme=dark]{color-scheme:dark;--paper:#212121;--ink:#ececec;--muted:#a
 @media(max-width:900px){.message{margin-bottom:28px;font-size:15px}.message.user{max-width:88%}.message-action{width:36px;height:36px}.message.user .message-actions{display:none}}
 
 .composer-actions #attach{display:flex;align-items:center;justify-content:center;line-height:1;padding:0}.composer-actions #attach svg{display:block;flex-shrink:0}
+@media(min-width:901px){#chat-view.has-messages{max-width:none}#chat-view.has-messages .messages{width:100%;padding-left:max(20px,calc((100% - 740px)/2));padding-right:max(20px,calc((100% - 740px)/2))}}
+@media(min-width:901px){main:has(#chat-view:not([hidden])){padding-left:0;padding-right:0}main:has(#chat-view:not([hidden]))>header{padding-left:32px;padding-right:32px}#chat-view.has-messages .messages{max-width:none;margin:0}}
