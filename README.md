@@ -21,7 +21,7 @@ Signed-out users can save links, screenshots, and text in guest mode, recall mat
 
 ## Implemented
 - Responsive library, keyword recall, capture dialog, screenshot display, source details, deletion, JSON export.
-- Google OAuth PKCE; tokens held in browser memory, verifier in session storage. Current session ends on reload: sign in again. Persistent secure-cookie sessions are a production follow-up.
+- Google OAuth PKCE with a server-side code exchange. Access and refresh tokens stay in Secure, HttpOnly, SameSite=Lax __Host cookies; only the user profile reaches browser JS. The session restores on reload and rotates expired access tokens using Supabase refresh tokens. The PKCE verifier is temporary session storage.
 - Cloudflare Worker API verifies each request against Supabase Auth. Supabase RLS isolates every user's records. No service-role key in the app.
 - AES-GCM application encryption for titles, text, screenshot bytes, tags and chat content, bound to owner ID. IDs, ownership and timestamps remain visible in database metadata.
 - Memory-grounded cloud chat, explicit save-answer action, encrypted chat history, 20 questions/day and 200 memories/user beta caps.
@@ -32,14 +32,14 @@ This is not E2E encryption. The backend can decrypt records; enabled cloud AI re
 
 Standalone HTTPS links pasted into signed-in chat are fetched, saved, and summarized with AI. The reader checks public DNS addresses and every redirect, enforces a 10-second deadline and 1 MB body cap, and rejects non-text responses. DNS checking does not pin the connection address, so DNS-rebinding resistance still needs a network-enforced egress proxy before unrestricted public launch. Sites that block access need pasted article text. Screenshot images are saved but automatic OCR/vision is not yet wired; provide their text/description. This avoids pretending the assistant understood uncaptured content. Processing queues, stronger network-enforced egress restrictions, and OCR remain follow-ups.
 
-Retrieval currently matches keywords over up to 200 decrypted records, not embeddings. Current web research is not included; the AI must disclose that limitation. The chat displays plain text and source citations, never renders untrusted HTML. Only the question and up to three 1,500-character saved passages are passed to Cloudflare Workers AI. Explicit followups reuse the previous source IDs; prior chat text and screenshot bytes are excluded. No autonomous tools are exposed.
+Retrieval currently matches keywords over up to 200 decrypted records, not embeddings. Current web research is not included; the AI must disclose that limitation. The chat displays plain text and source citations, never renders untrusted HTML. The question, the last two chat messages (up to 800 characters each), and up to three 1,500-character saved passages are passed to Cloudflare Workers AI. Explicit followups reuse the previous source IDs; screenshot bytes are excluded. No autonomous tools are exposed.
 
-Free tiers are shared resources, not unlimited capacity. Add race-safe memory/upload quotas, pagination, private blob storage for screenshots, rate limits on non-chat endpoints, backups with tested recovery, session refresh and abuse controls before opening unrestricted registration. Beta data deletion removes active database rows; provider backups may retain data. Export contains plaintext.
+Free tiers are shared resources, not unlimited capacity. Add race-safe memory/upload quotas, pagination, private blob storage for screenshots, rate limits on non-chat endpoints, backups with tested recovery, abuse controls before opening unrestricted registration. Beta data deletion removes active database rows; provider backups may retain data. Export contains plaintext.
 
 The repository includes `omnimemo-repo-structure.html`, the original planning document, untouched.
 
 ## AI safeguards
-Cloud AI is enabled for authenticated users. Guest recall remains local and deterministic. Before inference, a conservative intent filter rejects unrelated requests and requires matching saved sources. This is a heuristic, not a perfect semantic firewall; ambiguous phrasing can be rejected and adversarial phrasing can pass. The model is instructed to decline unrelated tasks and treat saved content as untrusted evidence.
+Cloud AI is enabled for authenticated users. Guest recall remains local and deterministic. Every signed-in chat message now uses the AI model, including greetings and scope clarification. The model is instructed to stay within memory capture, recall and app guidance, decline unrelated work, and treat sources as untrusted evidence. This is not a perfect semantic firewall. All calls reserve quota before inference; replies use real SSE streaming, not a simulated typewriter effect.
 
 A shared SQLite Durable Object atomically reserves at most 50 AI attempts/day across the app, 20/account/day, and 3/account/minute. Daily counters reset at midnight UTC. Failed inference attempts count; no automatic retries. Questions are limited to 1,000 characters and output to 400 model tokens. This bounds usage, not exact neuron consumption; Cloudflare's account-wide free quota can be exhausted earlier by this or other apps. No paid plan is enabled by deployment. Missing budget bindings or budget failures stop inference.
 

@@ -34,3 +34,4 @@ test('a pasted note is saved, sent to AI, and returned as a source without dupli
  assert.equal(r.status,200);const reply=await r.json();assert.equal(reply.savedItem.type,'note');assert.equal(reply.sources[0].id,'new');assert.equal(stats().aiCalls,1);
  const messages=stats().calls.filter(c=>c.url.endsWith('/chat_messages'));const stored=await decrypt(JSON.parse(messages[1].opts.body).payload,key,'alice');assert.equal(stored.savedItem,undefined);
 });});
+test('greetings use the AI budget and model even without saved sources',async()=>{await mocked(async(e,stats)=>{const r=await worker.fetch(req('chat',{message:'hi'}),e);assert.equal(r.status,200);assert.equal(stats().aiCalls,1);assert.equal(stats().reservations,1);});});

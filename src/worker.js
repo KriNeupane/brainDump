@@ -1,3 +1,5 @@
+import {cookieTokens,sessionEndpoint} from './session.js';
+import { streamAnswer } from './stream.js';
 import { captureIntent } from '../public/capture-intent.js';
 import { readArticle } from './articles.js';
 import { guidanceReply } from '../public/guidance.js';
@@ -20,7 +22,8 @@ async function handle(request,env) {
  if(url.pathname==='/api/config') return json({ready,supabaseUrl:env.SUPABASE_URL||'',anonKey:env.SUPABASE_PUBLISHABLE_KEY||'',aiEnabled:env.AI_ENABLED==='true'});
  if(!ready) return json({error:'Cloud services are not configured yet. Use the sample preview.'},503);
  if(!['GET','HEAD'].includes(request.method)&&request.headers.get('Origin')!==url.origin) return json({error:'Invalid request origin.'},403);
- const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');
+ if(url.pathname==='/api/session')return sessionEndpoint(request,env);
+ const token=request.headers.get('Authorization')?.replace(/^Bearer /,'')||cookieTokens(request).access;
  if(!token) return json({error:'Sign in to continue.'},401);
  const auth=await fetch(`${env.SUPABASE_URL}/auth/v1/user`,{headers:{apikey:env.SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${token}`}});
  if(!auth.ok) return json({error:'Your session expired. Sign in again.'},401);
@@ -81,9 +84,9 @@ async function handle(request,env) {
   const sources=context.sources;
   let answer;
   const guidance=guidanceReply(message,items.length>0);
-  if(guidance)answer=guidance;
-  else if(context.reason==='scope')answer='Let’s connect that to your memories. Use + to save a relevant source, or ask “What did I save about…” followed by its topic. I can then help you understand or compare what you saved.';
-  else if(context.reason==='missing')answer='I couldn’t find a relevant saved memory. Save a source or mention its topic or title.';
+  if(env.AI_ENABLED!=='true'&&guidance)answer=guidance;
+  else if(env.AI_ENABLED!=='true'&&context.reason==='scope')answer='Let’s connect that to your memories. Use + to save a relevant source, or ask “What did I save about…” followed by its topic. I can then help you understand or compare what you saved.';
+  else if(env.AI_ENABLED!=='true'&&context.reason==='missing')answer='I couldn’t find a relevant saved memory. Save a source or mention its topic or title.';
   else if(env.AI_ENABLED!=='true')answer=`I found ${sources.length} matching memories. Open the sources below to read your saved content.`;
   else {
    if(!env.AI_BUDGET||!env.AI)return json({error:'AI is temporarily unavailable. Your memories are safe.'},503);
@@ -94,7 +97,15 @@ async function handle(request,env) {
    const {reason}=await reservation.json();
    if(reason)return json({...(savedItem?{savedItem}:{}),error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
    try {
-    const result=await env.AI.run(env.AI_MODEL,modelInput(savedItem?'I just shared this source. Briefly explain what it is about, highlight the useful details, and ask one relevant follow-up question.':message,sources));
+    const input=modelInput(savedItem?'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.':message,sources);
+    input.messages.splice(1,0,...previous.slice().reverse().map(m=>({role:m.role,content:m.content.slice(0,800)})));
+    const result=await env.AI.run(env.AI_MODEL,{...input,stream:body.stream===true});
+    if(body.stream===true){
+     if(!result?.getReader)throw Error('Invalid stream');
+     return streamAnswer(result,{...(savedItem?{savedItem}:{}),sources:sources.map(s=>({id:s.id,title:s.title}))},async content=>{
+      for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},{role:'assistant',content,sources:sources.map(s=>({id:s.id,title:s.title})),createdAt:new Date().toISOString()}])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
+     });
+    }
     answer=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim().slice(0,2400);
     if(!answer)throw Error('Empty response');
    }catch{return json({...(savedItem?{savedItem}:{}),error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
