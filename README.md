@@ -24,7 +24,7 @@ Signed-out users can save links, screenshots, and text in guest mode, recall mat
 - Google OAuth PKCE with a server-side code exchange. Access and refresh tokens stay in Secure, HttpOnly, SameSite=Lax __Host cookies; only the user profile reaches browser JS. The session restores on reload and rotates expired access tokens using Supabase refresh tokens. The PKCE verifier is temporary session storage.
 - Cloudflare Worker API verifies each request against Supabase Auth. Supabase RLS isolates every user's records. No service-role key in the app.
 - AES-GCM application encryption for titles, text, screenshot bytes, tags and chat content, bound to owner ID. IDs, ownership and timestamps remain visible in database metadata.
-- Memory-grounded cloud chat, explicit save-answer action, encrypted chat history, 20 questions/day and 200 memories/user beta caps.
+- Memory-grounded cloud chat, explicit save-answer action, encrypted chat history, 20 AI attempts/day and 200 memories/user beta caps.
 - CSP, same-origin mutation checks, private caching and generic server error responses; application code does not log user content.
 
 ## Important limits before a public launch
@@ -46,3 +46,6 @@ A shared SQLite Durable Object atomically reserves at most 50 AI attempts/day ac
 Cloudflare states it does not use Workers AI content for training or improvement without explicit consent: https://developers.cloudflare.com/workers-ai/platform/data-usage/. Cloudflare processes selected plaintext during inference. The app stores chats encrypted and does not add AI Gateway prompt logging. Self-service account deletion uses a caller-bound RPC; actual destructive deletion is not part of browser smoke tests.
 
 Dump saves text, HTTPS links and images through one composer. Image descriptions are optional; OCR remains unavailable. Existing links reuse the saved source. Successful signed-in dumps can use a bounded AI acknowledgment under the same quota; exhausted allowances or provider failures fall back to “Saved.” without undoing storage. Dumps do not create chat history. Guest dumping remains local, with no AI or server fetching.
+
+### Beta limits explained
+The 20/account/day and 50/app/day AI limits are application policy, not provider question limits. Chat replies, short AI dump acknowledgments, and failed inference attempts share these counters. Saving remains available after AI runs out; acknowledgments fall back to “Saved.” Daily counters reset at 00:00 UTC, and quota notices display the reset in the browser’s local time. Memory storage is capped at 200 items/account, with 40,000 characters per text item and 3 MB per image. Images currently live in the database as encoded data and have no OCR; this is a beta storage tradeoff, not a scalable upload design.

@@ -103,7 +103,7 @@ async function handle(request,env) {
    const reservation=await budget.fetch('https://budget/reserve',{method:'POST',body:JSON.stringify({user:userHash})});
    if(!reservation.ok)return json({error:'AI is temporarily unavailable.'},503);
    const {reason}=await reservation.json();
-   if(reason)return json({...(savedItem?{savedItem}:{}),error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
+   if(reason)return json({...(savedItem?{savedItem}:{}),code:'ai_limit',limit:reason,resetsAt:new Date(reason==='burst'?(Math.floor(Date.now()/60000)+1)*60000:(Math.floor(Date.now()/86400000)+1)*86400000).toISOString(),error:reason==='burst'?'Give it a moment before your next AI reply.':'AI replies are paused for now.'},429);
    try {
     const input=modelInput(savedItem?(savedItem.status==='needs-content'?'The link is saved, but the publisher blocked article access. Explain this briefly and invite the user to use Add article text. You have not read the article: do not summarize it, infer facts from its URL, or cite it as evidence.':'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.'):message,sources,context.inventory);
     if(!context.inventory)input.messages.splice(1,0,...previous.slice().reverse().map(m=>({role:m.role,content:m.content.slice(0,800)})));
