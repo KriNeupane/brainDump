@@ -12,7 +12,7 @@ npm run dev
 Signed-out users can save links, screenshots, and text in guest mode, recall matching saved passages, and export their library and chat. Guest data lives only in tab memory, disappears on reload or navigation away, and is not uploaded. Recall uses deterministic matching, not a connected AI model. Sign-in warns users to export guest content before leaving; automatic guest-to-account import is not implemented.
 
 ## Cloud setup
-1. Create a Supabase project. Run `supabase/schema.sql` in its SQL editor.
+1. Create a Supabase project. Run `supabase/schema.sql` and the SQL files under `supabase/migrations/` in its SQL editor.
 2. Enable Google under Authentication → Providers; configure Google OAuth credentials and your production callback/redirect URLs. Disable providers you do not need.
 3. Copy `.dev.vars.example` to `.dev.vars`. Supply Supabase URL, publishable key, and a 32-byte base64 encryption key (`openssl rand -base64 32`). Never commit `.dev.vars`.
 4. In production set secrets with `npx wrangler secret put SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `CONTENT_KEY` individually. Preserve CONTENT_KEY securely; losing it makes existing encrypted records unreadable. Rotation requires migration.
@@ -20,7 +20,7 @@ Signed-out users can save links, screenshots, and text in guest mode, recall mat
 6. Run `npm test`, then `npm run deploy`. Use the workers.dev domain initially; set Supabase redirect URLs to its exact origin.
 
 ## Implemented
-- Responsive library, filters, full text matching, capture dialog, screenshot display, source details, deletion, JSON export.
+- Responsive library, keyword recall, capture dialog, screenshot display, source details, deletion, JSON export.
 - Google OAuth PKCE; tokens held in browser memory, verifier in session storage. Current session ends on reload: sign in again. Persistent secure-cookie sessions are a production follow-up.
 - Cloudflare Worker API verifies each request against Supabase Auth. Supabase RLS isolates every user's records. No service-role key in the app.
 - AES-GCM application encryption for titles, text, screenshot bytes, tags and chat content, bound to owner ID. IDs, ownership and timestamps remain visible in database metadata.
@@ -32,8 +32,15 @@ This is not E2E encryption. The backend can decrypt records; enabled cloud AI re
 
 Article links are saved but not fetched automatically. Paste article text to make it searchable. Screenshot images are saved but automatic OCR/vision is not yet wired; provide their text/description. This avoids pretending the assistant understood uncaptured content. Hardened extraction with SSRF protection, bounded redirects, processing queues and OCR are next.
 
-Retrieval currently matches keywords over up to 200 decrypted records, not embeddings. Current web research is not included; the AI must disclose that limitation. The chat displays plain text and source citations, never renders untrusted HTML. Existing chat context is passed to the configured model; no autonomous external tools are exposed.
+Retrieval currently matches keywords over up to 200 decrypted records, not embeddings. Current web research is not included; the AI must disclose that limitation. The chat displays plain text and source citations, never renders untrusted HTML. Only the question and up to three 1,500-character saved passages are passed to Cloudflare Workers AI. Explicit followups reuse the previous source IDs; prior chat text and screenshot bytes are excluded. No autonomous tools are exposed.
 
-Free tiers are shared resources, not unlimited capacity. Add global usage protection, race-safe memory/upload quotas, pagination, private blob storage for screenshots, rate limits on non-chat endpoints, backups with tested recovery, account deletion automation, session refresh and abuse controls before opening unrestricted registration. Beta data deletion removes active database rows; provider backups may retain data. Export contains plaintext.
+Free tiers are shared resources, not unlimited capacity. Add race-safe memory/upload quotas, pagination, private blob storage for screenshots, rate limits on non-chat endpoints, backups with tested recovery, session refresh and abuse controls before opening unrestricted registration. Beta data deletion removes active database rows; provider backups may retain data. Export contains plaintext.
 
 The repository includes `omnimemo-repo-structure.html`, the original planning document, untouched.
+
+## AI safeguards
+Cloud AI is enabled for authenticated users. Guest recall remains local and deterministic. Before inference, a conservative intent filter rejects unrelated requests and requires matching saved sources. This is a heuristic, not a perfect semantic firewall; ambiguous phrasing can be rejected and adversarial phrasing can pass. The model is instructed to decline unrelated tasks and treat saved content as untrusted evidence.
+
+A shared SQLite Durable Object atomically reserves at most 50 AI attempts/day across the app, 20/account/day, and 3/account/minute. Daily counters reset at midnight UTC. Failed inference attempts count; no automatic retries. Questions are limited to 1,000 characters and output to 400 model tokens. This bounds usage, not exact neuron consumption; Cloudflare's account-wide free quota can be exhausted earlier by this or other apps. No paid plan is enabled by deployment. Missing budget bindings or budget failures stop inference.
+
+Cloudflare states it does not use Workers AI content for training or improvement without explicit consent: https://developers.cloudflare.com/workers-ai/platform/data-usage/. Cloudflare processes selected plaintext during inference. The app stores chats encrypted and does not add AI Gateway prompt logging. Self-service account deletion uses a caller-bound RPC; actual destructive deletion is not part of browser smoke tests.
