@@ -60,3 +60,14 @@ Saved the user-provided UT CDSO application page, Georgia Tech fellowship page, 
 The user’s screenshot also showed an invented current time. The model has no live clock/timezone. Prompt instructions now make that limitation explicit, and direct current-time requests retrieve no memories. The first live retest stopped inventing clock time but substituted an irrelevant saved date; this prompted the stricter no-source handling and instruction against substituting capture dates.
 
 Final live time retest replied: “I don’t have access to live time or clocks. Let me know how I can help with your memories!” with no source buttons or invented date.
+
+## Chat motion, library actions, and blocked-article recovery
+Incoming SSE text now updates the active reply instead of rebuilding history for every delta. A small animation-frame buffer smooths network bursts, with reduced-motion and background-tab handling. Auto-follow eases to the bottom on send and follows incoming text; wheel/touch/keyboard interaction stops it. Live DOM samples showed scroll positions progressing 5001 → 5156 → 5212 rather than snapping, and reply text progressing 0 → 26 → 50 characters. During an upward-scroll test, the reader’s position remained 4336 while new content arrived and after completion. No browser console errors were observed.
+
+Memories has a minimal full-text search over titles/content/tags, compact previews, and selection controls. Select one, several, or all and confirm Delete. Server bulk deletion uses one owner-filtered hard DELETE, independently of chat history. Browser verified search matches, no-match state, single/all confirmation and cancellation; no production memory deletion was executed. Tests validate caller scoping, invalid selections, and that chat is untouched.
+
+Source shortcuts now appear only for citations actually present in the answer, retaining original citation numbers. Timer/greeting/history responses no longer expose unrelated retrieved links. Comparison queries retain multiple relevant institutions rather than restricting to UT.
+
+The supplied Washington Post link was tested live. Publisher access was blocked; the link was saved as needing content, with a natural AI explanation and an Add article text action instead of a failed-send error. The focused paste dialog was opened and cancelled. Pasted text updates the existing encrypted article record, then requests a summary without another URL fetch or duplicate. That write/summary handoff is covered by fixture tests; no paywalled article text was obtained or pasted in the browser. Suite: 59 passing tests.
+
+Browser proof screenshots are now kept in ignored .artifacts/browser rather than the repository root. Earlier screenshot paths in conversation messages predate that cleanup.

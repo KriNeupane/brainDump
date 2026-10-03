@@ -6,7 +6,7 @@ export function selectContext(items,message,previousSources=[]) {
  if(/^(?:what time is it|what(?:’s|'s| is) the (?:current )?time|what(?:’s|'s| is) (?:today’s date|today's date|the date))[?!.]*$/i.test(message.trim()))return {reason:'scope',sources:[]};
  if(forbidden.test(message)) return {reason:'scope',sources:[]};
  const topic=message.replace(/\b(?:i|my|me|you|your|our|the|and|for|are|can|could|would|please|did|does|how|why|when|where|was|were|which|is|in|on|of|to|it|that|this|them|they|saved?|memor(?:y|ies)|recall|remember|summari[sz]e|summary|compare|explain|article|note|screenshot|said|say|mention|mean|find|more)\b/gi,' ');
- let sources=retrieve(items,topic).slice(0,3);
+ let sources=retrieve(items,topic,{restrictInstitution:!/\b(compare|versus|vs|both|between)\b/i.test(message)}).slice(0,3);
  if(followup.test(message)&&previousSources.length) sources=previousSources.map(s=>items.find(i=>i.id===s.id)).filter(Boolean).slice(0,3);
  return {reason:sources.length?null:(!intent.test(message)&&!followup.test(message)?'scope':'missing'),sources};
 }

@@ -1,4 +1,5 @@
 export function visibleAnswer(raw){return raw.replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').replace(/<[^>]*$/,'').trimStart().slice(0,2400);}
+export function citedSources(content,sources){return sources.map((source,i)=>({...source,number:source.number||i+1})).filter(source=>source.needsContent||content.includes('['+source.number+']'));}
 export function streamAnswer(source,meta,persist){
  const encoder=new TextEncoder();
  return new Response(new ReadableStream({async start(controller){
@@ -12,7 +13,7 @@ export function streamAnswer(source,meta,persist){
    for(;;){const {value,done}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});const lines=pending.split('\n');pending=lines.pop();for(const value of lines)line(value);}
    pending+=decoder.decode();if(pending)line(pending);
    if(!visible.trim())throw Error('empty');
-   await persist(visible);emit({type:'done'});
+   await persist(visible);emit({type:'done',sources:citedSources(visible,meta.sources||[])});
   }catch{emit({type:'error',message:visible?'The reply was interrupted or could not be saved. Please try again.':'AI is unavailable right now. Please try again later.'});}
   finally{await reader.cancel().catch(()=>{});controller.close();}
  }}),{headers:{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Accel-Buffering':'no'}});

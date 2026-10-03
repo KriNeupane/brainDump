@@ -1,5 +1,5 @@
 import {cookieTokens,sessionEndpoint} from './session.js';
-import { streamAnswer } from './stream.js';
+import { streamAnswer, citedSources } from './stream.js';
 import { captureIntent } from '../public/capture-intent.js';
 import { readArticle } from './articles.js';
 import { guidanceReply } from '../public/guidance.js';
@@ -44,6 +44,18 @@ async function handle(request,env) {
  const raw=await request.text();if(raw.length>4500000)return json({error:'Upload too large.'},413);
  let body;try{body=JSON.parse(raw)}catch{return json({error:'Invalid request.'},400)}
  if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Send a JSON object.'},400);
+ if(request.method==='PATCH'&&/^\/api\/memories\/[a-f0-9-]{36}$/.test(url.pathname)) {
+  if(typeof body.content!=='string'||!body.content.trim()||body.content.length>40000)return json({error:'Paste article text, up to 40,000 characters.'},400);
+  const item=(await readItems(env,token,user.id)).find(item=>item.id===url.pathname.split('/').pop());if(!item)return json({error:'Memory not found.'},404);
+  if(item.type!=='article')return json({error:'Choose an article memory.'},400);
+  const {id,createdAt,...data}=item;data.content=body.content.trim();data.status='saved';delete data.captureIssue;
+  await db(env,token,`memories?user_id=eq.${user.id}&id=eq.${id}`,{method:'PATCH',body:JSON.stringify({payload:await encrypt(data,env.CONTENT_KEY,user.id)})});return json({item:{...data,id,createdAt}});
+ }
+ if(request.method==='DELETE'&&url.pathname==='/api/memories') {
+  if(!Array.isArray(body.ids)||!body.ids.length||body.ids.length>200||body.ids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)))return json({error:'Select between 1 and 200 valid memories.'},400);
+  const ids=[...new Set(body.ids)];
+  await db(env,token,`memories?user_id=eq.${user.id}&id=in.(${ids.join(',')})`,{method:'DELETE'});return json({ok:true});
+ }
  if(request.method==='POST'&&url.pathname==='/api/memories') {
   if(!['article','screenshot','note'].includes(body.type))return json({error:'Choose a supported format.'},400);
   const items=await readItems(env,token,user.id);if(items.length>=200)return json({error:'Beta limit reached: 200 memories. Export or delete some items.'},429);
@@ -73,8 +85,8 @@ async function handle(request,env) {
    if(items.length>=200)return json({error:'Your library has reached the 200-memory beta limit.'},429);
    let data;
    if(capture.type==='article'){
-    const existing=items.find(i=>i.url===capture.url&&i.content);if(existing)savedItem=existing;
-    else{try{data={type:'article',...await readArticle(capture.url),tags:[],status:'saved'};}catch(e){return json({error:e.message||'Could not read this link. Paste its text instead.'},422);}}
+    const existing=items.find(i=>i.url===capture.url);if(existing)savedItem=existing;
+    else{try{data={type:'article',...await readArticle(capture.url),tags:[],status:'saved'};}catch(e){if(e.message==='This site blocked access. Paste its article text here instead.'){const link=safeUrl(capture.url);data={type:'article',url:link.href,title:link.hostname,content:'',tags:[],status:'needs-content',captureIssue:'blocked'};}else return json({error:e.message||'Could not read this link. Paste its text instead.'},422);}}
    }else data={type:'note',title:capture.content.slice(0,80),content:capture.content,tags:[],url:'',status:'saved'};
    if(data){const rows=await db(env,token,'memories',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(data,env.CONTENT_KEY,user.id)})});savedItem={...data,id:rows[0].id,createdAt:rows[0].created_at};items.unshift(savedItem);}
   }
@@ -97,20 +109,20 @@ async function handle(request,env) {
    const {reason}=await reservation.json();
    if(reason)return json({...(savedItem?{savedItem}:{}),error:reason==='global'?'The shared daily AI allowance is used up. Try again tomorrow.':reason==='burst'?'Please wait a minute before asking another AI question.':'Daily AI limit reached (20 questions). Try again tomorrow.'},429);
    try {
-    const input=modelInput(savedItem?'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.':message,sources);
+    const input=modelInput(savedItem?(savedItem.status==='needs-content'?'The link is saved, but the publisher blocked article access. Explain this briefly and invite the user to use Add article text. You have not read the article: do not summarize it, infer facts from its URL, or cite it as evidence.':'The user just shared this source. Confirm it is saved, briefly explain its useful details, and ask one natural follow-up if needed.'):message,sources);
     input.messages.splice(1,0,...previous.slice().reverse().map(m=>({role:m.role,content:m.content.slice(0,800)})));
     const result=await env.AI.run(env.AI_MODEL,{...input,stream:body.stream===true});
     if(body.stream===true){
      if(!result?.getReader)throw Error('Invalid stream');
-     return streamAnswer(result,{...(savedItem?{savedItem}:{}),sources:sources.map(s=>({id:s.id,title:s.title}))},async content=>{
-      for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},{role:'assistant',content,sources:sources.map(s=>({id:s.id,title:s.title})),createdAt:new Date().toISOString()}])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
+     return streamAnswer(result,{...(savedItem?{savedItem}:{}),sources:sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))},async content=>{
+      for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},{role:'assistant',content,sources:citedSources(content,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()}])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
      });
     }
     answer=String(result.response||'').replace(/<think>[\s\S]*?(?:<\/think>|$)/g,'').trim().slice(0,2400);
     if(!answer)throw Error('Empty response');
    }catch{return json({...(savedItem?{savedItem}:{}),error:'AI is unavailable right now. Open your saved sources or try again later.'},503);}
   }
-  const reply={...(savedItem?{savedItem}:{}),role:'assistant',content:(savedItem?'Saved to your memories.\n\n':'')+answer,sources:sources.map(s=>({id:s.id,title:s.title})),createdAt:new Date().toISOString()};
+  const reply={...(savedItem?{savedItem}:{}),role:'assistant',content:(savedItem?'Saved to your memories.\n\n':'')+answer,sources:citedSources(answer,sources.map(s=>({id:s.id,title:s.title,...(s.status==='needs-content'?{needsContent:true}:{})}))),createdAt:new Date().toISOString()};
   const {savedItem:captured,...storedReply}=reply;
   for(const msg of [{role:'user',content:message,createdAt:new Date().toISOString()},storedReply])await db(env,token,'chat_messages',{method:'POST',body:JSON.stringify({user_id:user.id,payload:await encrypt(msg,env.CONTENT_KEY,user.id)})});
   return json(reply);
