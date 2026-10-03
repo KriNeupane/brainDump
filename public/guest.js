@@ -1,5 +1,7 @@
+import { guidanceReply } from './guidance.js';
 // Guest recall never sends memory contents to a server or inference provider.
 export function guestReply(question,items){
+ const guidance=guidanceReply(question,items.length>0);if(guidance)return {role:'assistant',content:guidance,sources:[]};
  const stop=new Set(['what','did','save','saved','about','read','that','this','with','have','from','sent','article','remember','tell','something','can','you','the','was','for','and','hey','please','recall','past']);
  const terms=[...new Set((question.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu)||[]).filter(t=>!stop.has(t)))];
  const listAll=/\b(list|recent|latest|everything|all)\b/i.test(question);

@@ -1,3 +1,4 @@
+import { guidanceReply } from '../public/guidance.js';
 import { selectContext, modelInput } from './ai-policy.js';
 export { AiBudget } from './ai-policy.js';
 import { safeUrl, encrypt, decrypt, extractArticle, retrieve, validScreenshot } from './security.js';
@@ -66,7 +67,9 @@ async function handle(request,env) {
   const context=selectContext(items,message,previous.find(m=>m.role==='assistant')?.sources||[]);
   const sources=context.sources;
   let answer;
-  if(context.reason==='scope')answer='I can help you find, summarize, compare, and understand your saved memories. Ask about something you saved.';
+  const guidance=guidanceReply(message,items.length>0);
+  if(guidance)answer=guidance;
+  else if(context.reason==='scope')answer='Let’s connect that to your memories. Use + to save a relevant source, or ask “What did I save about…” followed by its topic. I can then help you understand or compare what you saved.';
   else if(context.reason==='missing')answer='I couldn’t find a relevant saved memory. Save a source or mention its topic or title.';
   else if(env.AI_ENABLED!=='true')answer=`I found ${sources.length} matching memories. Open the sources below to read your saved content.`;
   else {
