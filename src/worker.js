@@ -1,7 +1,7 @@
 import { safeUrl, encrypt, decrypt, extractArticle, retrieve } from './security.js';
 const json = (data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 async function db(env,token,path,options={}) {
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`,{...options,headers:{apikey:env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json',Prefer:'return=representation',...options.headers}});
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`,{...options,headers:{apikey:env.SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json',Prefer:'return=representation',...options.headers}});
   if(!res.ok) throw new Error('Storage request failed.');
   return res.status===204?null:res.json();
 }
@@ -11,13 +11,13 @@ async function readItems(env,token,owner) {
 }
 async function handle(request,env) {
  const url=new URL(request.url);
- const ready=!!(env.SUPABASE_URL&&env.SUPABASE_ANON_KEY&&env.CONTENT_KEY);
- if(url.pathname==='/api/config') return json({ready,supabaseUrl:env.SUPABASE_URL||'',anonKey:env.SUPABASE_ANON_KEY||'',aiEnabled:env.AI_ENABLED==='true'});
+ const ready=!!(env.SUPABASE_URL&&env.SUPABASE_PUBLISHABLE_KEY&&env.CONTENT_KEY);
+ if(url.pathname==='/api/config') return json({ready,supabaseUrl:env.SUPABASE_URL||'',anonKey:env.SUPABASE_PUBLISHABLE_KEY||'',aiEnabled:env.AI_ENABLED==='true'});
  if(!ready) return json({error:'Cloud services are not configured yet. Use the sample preview.'},503);
  if(!['GET','HEAD'].includes(request.method)&&request.headers.get('Origin')!==url.origin) return json({error:'Invalid request origin.'},403);
  const token=request.headers.get('Authorization')?.replace(/^Bearer /,'');
  if(!token) return json({error:'Sign in to continue.'},401);
- const auth=await fetch(`${env.SUPABASE_URL}/auth/v1/user`,{headers:{apikey:env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`}});
+ const auth=await fetch(`${env.SUPABASE_URL}/auth/v1/user`,{headers:{apikey:env.SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${token}`}});
  if(!auth.ok) return json({error:'Your session expired. Sign in again.'},401);
  const user=await auth.json();
  if(request.method==='GET'&&url.pathname==='/api/memories') return json({items:await readItems(env,token,user.id)});
@@ -51,7 +51,7 @@ async function handle(request,env) {
  }
  if(request.method==='POST'&&url.pathname==='/api/chat') {
   const message=String(body.message||'').trim().slice(0,2000);if(!message)return json({error:'Write a question first.'},400);
-  const allowance=await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/consume_chat_quota`,{method:'POST',headers:{apikey:env.SUPABASE_ANON_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}'});
+  const allowance=await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/consume_chat_quota`,{method:'POST',headers:{apikey:env.SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}'});
   if(!allowance.ok||!(await allowance.json()))return json({error:'Daily beta limit reached (20 questions). Try again tomorrow.'},429);
   const items=await readItems(env,token,user.id),sources=retrieve(items,message);
   let answer;

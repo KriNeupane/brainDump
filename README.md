@@ -14,8 +14,8 @@ Without secrets, the UI runs a clearly labeled sample preview. Preview data live
 ## Cloud setup
 1. Create a Supabase project. Run `supabase/schema.sql` in its SQL editor.
 2. Enable Google under Authentication → Providers; configure Google OAuth credentials and your production callback/redirect URLs. Disable providers you do not need.
-3. Copy `.dev.vars.example` to `.dev.vars`. Supply Supabase URL, public anon key, and a 32-byte base64 encryption key (`openssl rand -base64 32`). Never commit `.dev.vars`.
-4. In production set secrets with `npx wrangler secret put SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `CONTENT_KEY` individually. Preserve CONTENT_KEY securely; losing it makes existing encrypted records unreadable. Rotation requires migration.
+3. Copy `.dev.vars.example` to `.dev.vars`. Supply Supabase URL, publishable key, and a 32-byte base64 encryption key (`openssl rand -base64 32`). Never commit `.dev.vars`.
+4. In production set secrets with `npx wrangler secret put SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `CONTENT_KEY` individually. Preserve CONTENT_KEY securely; losing it makes existing encrypted records unreadable. Rotation requires migration.
 5. Review your inference provider's training, retention, and data processing commitments before enabling `AI_ENABLED=true`. Configure this variable and an available model in `wrangler.jsonc`. Cloudflare Workers AI uses a shared free quota; some models require paid access.
 6. Run `npm test`, then `npm run deploy`. Use the workers.dev domain initially; set Supabase redirect URLs to its exact origin.
 
