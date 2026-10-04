@@ -88,3 +88,31 @@ Deployed a neutral composer notice with an explicit browser-local reset time. Li
 ## Phone layout audit — October 4, 2026
 Tested the deployed app at CSS viewport widths 320, 375, 390, 430, and landscape 844. Browser zoom was accounted for when setting the test viewport. Fixed first Chat opening at the oldest message, mobile composer width/alignment, touch targets, compact landscape header/drawer, and long article dialogs opening at the bottom due to focus placement.
 Verified search finds Druski; article detail starts at scrollTop 0; selection and Delete confirmation can be cancelled without deleting data; account menu fits landscape; all four Settings tabs and shortcuts fit the narrow screen; Shift Enter inserts a newline; Enter saves exactly one dump; a real streamed two-sentence Druski summary retains its source; reload preserves the signed-in account and saved test dump. No console errors captured. Viewport changes settle after the browser resize event; composer fits each tested viewport with no horizontal page overflow. Actual mobile OS keyboard and Safari/Android-specific behavior are not reproduced by desktop viewport testing. Did not log out the user's account or permanently delete production memories. Screenshots are in ignored `.artifacts/browser/phone-chat-fixed.jpg` and `phone-dump-fixed.jpg`.
+
+## Broad QA pass — October 4, 2026
+
+### Fixed and deployed
+- Search-filtered Select all now selects only visible results; live Druski search selected exactly one memory and displayed Delete memory, then cancellation preserved data.
+- Inline bold no longer forces separate lines or uppercase, repairing sentence/list readability.
+- Account initialization preserves the view selected during loading; chat submission waits for initialization instead of silently using guest state.
+- New article extraction decodes named, decimal, and hexadecimal HTML entities in titles and text, while rendering remains text-only. Existing encrypted records are not rewritten automatically.
+- Generic deadline/requirements/cost follow-ups retain the previously cited source. Regression tests cover missing/deleted sources and explicit topic changes.
+- AI instructions prohibit citation markers without supplied sources. A live unrelated poem request was refused, but the earlier model generated an unsupported [1]; the prompt fix is not a guarantee against all model errors.
+
+### Browser results
+Verified actual CSS widths 320 (phone), 768 (tablet), and 1440 (desktop), with Dump, Chat, and Settings showing no horizontal overflow. Earlier phone audit includes landscape and intermediate widths. An initial viewport loop did not resize the intended tab; those measurements were discarded and repeated on a dedicated newly created test tab.
+Live signed-in tests: filtered selection/cancel; empty search; unsafe private URL rejection with draft retained; SVG rejection; PNG preview/upload with short Saved acknowledgment; account-loading navigation retention; mixed note/image today inventory (two items, both correctly listed). No console errors captured on the final live tab. Synthetic QA image remains saved; no production memory was permanently deleted.
+Isolated localhost guest tests: whitespace creates no record; Unicode/emoji and literal script markup save as text; deadline recall returns the saved note; reload clears guest memory as documented. Export was clicked, but the browser download-event waiter timed out and reset browser tooling; actual downloaded-file verification remains open. This is not a confirmed app export failure.
+
+### Automated results and limits
+67 passing tests, zero failures, covering authentication/cookies, account isolation/encryption, request validation, storage limits, unsafe URLs and redirects, blocked article recovery, image signatures, inference limits/concurrency, provider failure handling, streaming/reasoning suppression, retrieval/follow-ups, capture-date inventory, and scroll/text animation behavior. These are deterministic tests with mocked providers, not a load test or independent penetration test.
+
+### Remaining release work
+- Real iOS Safari and Android Chrome, software keyboard, touch/paste/upload, screen readers, offline reconnect, and browser download verification.
+- Retrieval uses keyword matching and short excerpts; screenshot OCR/vision and semantic retrieval remain absent.
+- Memory count checking before insertion is not an atomic database quota; concurrent uploads need a database-enforced cap.
+- Encoded images share database storage; move them to private blob storage and enforce per-user byte quotas before broad public use.
+- Add non-chat abuse controls and verify database policies with independent real accounts, backup recovery, and sustained concurrent traffic.
+- Article reader verifies public DNS/redirects but does not pin connection addresses; harden outbound fetching against DNS rebinding before unrestricted public launch.
+
+Evidence: ignored `.artifacts/browser/broad-qa-desktop.jpg`. Final deployed version: ff36f01f-d6cb-428f-9e8d-8dc6624c899e.

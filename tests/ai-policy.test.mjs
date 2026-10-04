@@ -50,3 +50,5 @@ test('natural article followups retain the cited source instead of unrelated key
  assert.equal(selectContext(library.filter(i=>i.id!=='druski'),'Can you summarize that article?',[{id:'druski'}]).sources.length,0);
  assert.deepEqual(selectContext(library,'Instead summarize the article about G7 fuel',[{id:'druski'}]).sources.map(s=>s.id),['fuel']);
 });
+
+test('short deadline and requirement followups retain prior source',()=>{const library=[{id:'ut',title:'UT application',content:'Final deadline April 15.',tags:[]},{id:'other',title:'Other requirements',content:'An unrelated deadline.',tags:[]}];for(const q of ["What's the deadline?",'What are the requirements?','And what is the cost?'])assert.deepEqual(selectContext(library,q,[{id:'ut'}]).sources.map(s=>s.id),['ut']);const input=modelInput('Write me a poem',[]);assert(input.messages[0].content.includes('With no supplied sources, use no citation markers'))});

@@ -107,3 +107,5 @@ html[data-theme=dark]{color-scheme:dark;--paper:#212121;--ink:#ececec;--muted:#a
 }
 
 .detail-close{display:flex;justify-content:flex-end;position:sticky;top:-20px;background:var(--paper);z-index:1}.detail-close button{width:44px;height:44px;padding:0}#detail-body h2{overflow-wrap:anywhere}
+
+.message-content strong{display:inline;text-transform:none;letter-spacing:normal;margin:0}

@@ -17,11 +17,12 @@ export async function decrypt(value, keyText, owner) {
   const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:Uint8Array.from(atob(value.iv),c=>c.charCodeAt(0)),additionalData:new TextEncoder().encode(owner)},key,Uint8Array.from(atob(value.data),c=>c.charCodeAt(0)));
   return JSON.parse(new TextDecoder().decode(plain));
 }
+export function decodeEntities(value){return value.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi,(match,entity)=>{const named={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '};if(entity[0]!=='#')return named[entity.toLowerCase()]||match;const number=entity[1].toLowerCase()==='x'?parseInt(entity.slice(2),16):Number(entity.slice(1));return number>0&&number<=0x10ffff&&!(number>=0xd800&&number<=0xdfff)?String.fromCodePoint(number):match})}
 export function extractArticle(html) {
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || 'Saved article';
   const body = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] || html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] || html;
-  const text = body.replace(/<(script|style|nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/\s+/g,' ').trim();
-  return {title:title.replace(/<[^>]+>/g,'').trim().slice(0,200),text:text.slice(0,40000)};
+  const text = decodeEntities(body.replace(/<(script|style|nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim();
+  return {title:decodeEntities(title.replace(/<[^>]+>/g,'')).trim().slice(0,200),text:text.slice(0,40000)};
 }
 export function queryTerms(query) {
  const normalized=query.toLowerCase().replace(/\bapplcation\b/g,'application').replace(/\bmasters\b/g,'master');
