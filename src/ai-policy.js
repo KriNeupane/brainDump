@@ -1,6 +1,7 @@
 import { retrieve } from './security.js';
 const intent = /\b(saved?|memor(?:y|ies)|recall|remember|summari[sz]e|summary|compare|explain|article|note|screenshot|said|say|mention|mean|find)\b/i;
 const forbidden = /\b(ignore|override|disregard|system prompt|jailbreak|write (?:me )?(?:code|an essay|a poem)|homework|latest|current news|browse|search the web)\b/i;
+const contextualReference = /\b(?:that|this|the same|above|previous)\s+(?:article|source|link|note|memory|story|one)\b|\b(?:summari[sz]e|explain|compare|expand on|tell me more about)\s+(?:it|that|them)\b/i;
 const followup = /^(?:summari[sz]e (?:it|that|them)|explain (?:it|that)|(?:what|how) (?:does|did) (?:it|that|this)|tell me more|compare them)\b/i;
 function inventoryScope(message){
  if(!/\b(saved?|dump(?:s|ed)?|memor(?:y|ies))\b/i.test(message))return null;
@@ -22,7 +23,7 @@ export function selectContext(items,message,previousSources=[],options={}) {
  if(forbidden.test(message)) return {reason:'scope',sources:[]};
  const topic=message.replace(/\b(?:i|my|me|you|your|our|the|and|for|are|can|could|would|please|did|does|how|why|when|where|was|were|which|is|in|on|of|to|it|that|this|them|they|saved?|memor(?:y|ies)|recall|remember|summari[sz]e|summary|compare|explain|article|note|screenshot|said|say|mention|mean|find|more)\b/gi,' ');
  let sources=retrieve(items,topic,{restrictInstitution:!/\b(compare|versus|vs|both|between)\b/i.test(message)}).slice(0,3);
- if(followup.test(message)&&previousSources.length) sources=previousSources.map(s=>items.find(i=>i.id===s.id)).filter(Boolean).slice(0,3);
+ if((followup.test(message)||(contextualReference.test(message)&&!/\b(?:instead|different|another|rather)\b|\b(?:article|story|source|note)\s+about\b/i.test(message)))&&previousSources.length) sources=previousSources.map(s=>items.find(i=>i.id===s.id)).filter(Boolean).slice(0,3);
  return {reason:sources.length?null:(!intent.test(message)&&!followup.test(message)?'scope':'missing'),sources};
 }
 export function modelInput(message,sources,inventory=null) {

@@ -43,3 +43,10 @@ test('shared budget enforces global, daily and burst caps with atomic reservatio
  value.total=49;assert.deepEqual(await Promise.all([reserve('b'),reserve('c')]),[null,'global']);
  value.day='old';assert.equal(await reserve('a'),null);assert.equal(value.total,1);
 });
+
+test('natural article followups retain the cited source instead of unrelated keyword matches',()=>{
+ const library=[{id:'druski',title:'Druski Is Laughing All the Way to the Bank',content:'Druski is a comedian.',tags:[]},{id:'fuel',title:'G7 fuel reserves',content:'Refresh the fuel supply.',tags:[]},{id:'vote',title:'Why I Bring My Kids to Vote',content:'My memory of voting.',tags:[]}];
+ for(const question of ['so yea can you summarize that article for me to refresh my memory?','Can you explain this article?','What are the main points in the previous story?'])assert.deepEqual(selectContext(library,question,[{id:'druski'}]).sources.map(s=>s.id),['druski']);
+ assert.equal(selectContext(library.filter(i=>i.id!=='druski'),'Can you summarize that article?',[{id:'druski'}]).sources.length,0);
+ assert.deepEqual(selectContext(library,'Instead summarize the article about G7 fuel',[{id:'druski'}]).sources.map(s=>s.id),['fuel']);
+});
